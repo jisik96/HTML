@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ECMO · RPM과 flow</title>
+<style>
+:root{color-scheme:dark;--bg:#142d3e;--text:#f2f5f7;--muted:#b0c2ce;--line:#385566;--blue:#55bce8;--red:#f07e7e;--green:#74d7b0;--amber:#ffc66d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:17px/1.55 'Malgun Gothic',system-ui,sans-serif}main{max-width:1260px;margin:auto;padding:36px 36px 22px}h1{word-break:keep-all;font-size:32px;line-height:1.3;margin:0 0 9px}p{margin:0}.intro{color:var(--muted);font-size:15px}.top{border-bottom:1px solid var(--line);padding-bottom:20px;display:flex;justify-content:space-between;gap:20px}.tag{color:var(--muted);font-size:13px;white-space:nowrap;padding-top:10px}.metrics{display:flex;align-items:center;gap:52px;padding:21px 0 10px}.metric small{display:block;color:var(--muted);font-size:14px}.metric strong{font-size:46px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.25}.unit{font-size:17px;color:var(--muted);margin-left:8px}.state{margin-left:auto;max-width:420px}.state strong{display:block;font-size:21px;color:var(--green)}.state span{display:block;font-size:14px;color:var(--muted)}canvas{display:block;width:100%}#circuit{height:255px}.work{display:grid;grid-template-columns: .9fr 1.1fr;gap:40px;margin-top:12px;border-top:1px solid var(--line);padding-top:20px}.controls{display:grid;gap:19px}.control-head{display:flex;justify-content:space-between;gap:15px}.control-head output{font-variant-numeric:tabular-nums;color:var(--blue)}input[type=range]{width:100%;accent-color:var(--blue);height:26px;margin:3px 0;cursor:ew-resize}.ends{display:flex;justify-content:space-between;color:var(--muted);font-size:12px}.hint{font-size:13px;color:var(--muted)}h2{word-break:keep-all;font-size:16px;font-weight:500;margin:0 0 3px}.chartbox{min-width:0}#curve{height:238px}.legend{font-size:12px;color:var(--muted)}.key{display:inline-block;width:18px;height:3px;background:var(--green);vertical-align:middle;margin:0 6px 3px 14px}.key:first-child{margin-left:0}.key.dashed{background:repeating-linear-gradient(90deg,#9ab0bd 0 5px,transparent 5px 8px)}.presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}button{font:inherit;font-size:13px;border:1px solid var(--line);background:transparent;color:var(--text);border-radius:5px;padding:8px 12px;cursor:pointer}button:hover{background:#254659}button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--blue);outline-offset:4px}.bottom{margin-top:23px;padding-top:17px;border-top:1px solid var(--line)}.pearl{font-size:18px;color:var(--green);margin-bottom:8px}.note{font-size:12px;color:var(--muted)}details{margin-top:12px;font-size:13px;color:var(--muted)}summary{cursor:pointer;display:list-item;color:var(--text)}details p{margin:10px 0}a{color:var(--blue)}.motion{margin:10px 0 0;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}@media(max-width:760px){main{padding:22px 18px}h1{font-size:25px}.top{display:block}.tag{padding-top:7px}.metrics{gap:22px;flex-wrap:wrap}.metric strong{font-size:36px}.state{margin-left:0;max-width:none;flex:1 0 100%}.work{grid-template-columns:1fr;gap:24px}#circuit{height:225px}.pearl{font-size:16px}}@media print{button,.motion{display:none}}
+</style>
+</head>
+<body><main>
+<header class="top"><div><h1>RPM은 설정값, flow는 결과값</h1><p class="intro">Drainage · afterload · RPM을 바꾸며 실제 유량의 변화를 확인하세요.</p></div><span class="tag">ECMO 교육용 모형</span></header>
+<section class="metrics" aria-label="현재 결과"><div class="metric"><small>Pump speed</small><strong id="rpm-display">3,000</strong><span class="unit">RPM</span></div><div class="metric"><small>계산된 평균 blood flow</small><strong id="flow-display">4.49</strong><span class="unit">L/min</span></div><div class="state" aria-live="polite"><strong id="state-title">배액이 유지됩니다</strong><span id="state-detail">현재 조건에서는 RPM을 높이면 flow가 증가합니다.</span></div></section>
+<canvas id="circuit" role="img" aria-label="정맥에서 배액된 혈액이 pump와 oxygenator를 지나 환류하는 회로. 펌프 회전은 RPM, 입자 이동은 flow에 비례합니다."></canvas>
+<div class="work"><section class="controls" aria-label="회로 조건 조절">
+ <div><div class="control-head"><label for="drain">Drainage · 배액 여유</label><output id="drain-out" for="drain">100%</output></div><input type="range" id="drain" min="0" max="100" step="1" value="100"><div class="ends"><span>0 · 배액 불가</span><span>100 · 충분</span></div><p class="hint">정맥환류와 cannula 상태를 합친 상대 지표입니다.</p></div>
+ <div><div class="control-head"><label for="afterload">Afterload · 환류측 압력</label><output id="afterload-out" for="afterload">80 mmHg</output></div><input type="range" id="afterload" min="20" max="220" step="5" value="80"><div class="ends"><span>낮음</span><span>높음</span></div><p class="hint">Pump가 맞서는 출구 측 압력의 모형값입니다. MAP 자체가 아닙니다.</p></div>
+ <div><div class="control-head"><label for="rpm">Pump RPM</label><output id="rpm-out" for="rpm">3,000 RPM</output></div><input type="range" id="rpm" min="0" max="5000" step="50" value="3000"><div class="ends"><span>0 RPM</span><span>5,000 RPM</span></div></div>
+</section><section class="chartbox" aria-label="현재 조건의 RPM과 flow 관계"><h2>현재 drainage·afterload에서의 RPM–flow 관계</h2><canvas id="curve" role="img" aria-label="RPM을 가로축, flow를 세로축으로 표시한 그래프. 점은 현재 설정입니다."></canvas><div class="legend"><span class="key"></span>배액 제한을 반영한 flow<span class="key dashed"></span>정맥 허탈을 무시한 가상값</div><label class="motion"><input type="checkbox" id="motion" checked>혈류 애니메이션</label></section></div>
+<div class="presets" aria-label="비교할 상황"><button type="button" data-preset="normal">기본 상태</button><button type="button" data-preset="drain">같은 RPM · drainage 감소</button><button type="button" data-preset="rpm">부족한 drainage · RPM 증가</button><button type="button" data-preset="afterload">같은 RPM · afterload 증가</button></div>
+<footer class="bottom"><p class="pearl" id="pearl">Drainage와 afterload를 그대로 두고 RPM을 조절해 보세요.</p><p class="note">특정 장비·환자에 맞춰 검증한 모형이 아닙니다. 계산된 flow와 허탈 발생 지점은 원리 설명용이며 임상 설정값으로 사용할 수 없습니다.</p>
+<details><summary>모형과 해석</summary><p>원심펌프의 압력–유량 관계를 단순화했습니다. 가상 펌프 압력은 RPM의 제곱에 비례하고 유량이 증가하면 감소합니다. 여기에 환류측 압력과 배액 저항을 적용해 유량을 구합니다. Oxygenator·튜브의 저항은 고정했습니다.</p><p>배액 가능한 유량보다 강한 흡인이 발생하는 상황은 별도의 정맥 허탈 항으로 표현했습니다. 허탈 이후에는 RPM을 더 높여도 평균 유량이 감소할 수 있습니다. 실제 chatter는 이처럼 일정한 임계값이나 곡선으로 예측할 수 없으며, 불규칙한 유량 변화와 정맥·회로 상태를 함께 평가해야 합니다. 점선은 회로의 기계적 한계가 없는 것처럼 그린 비교값이며 임상 목표가 아닙니다.</p><p>Flow가 낮으면 drainage와 cannula 위치·꺾임, 환류측 저항을 확인합니다. RPM을 일시적으로 줄여 안정화할 수 있으며, 수액·수혈은 저혈량 여부를 평가한 뒤 판단합니다. 이 모형은 native heart, 혈액 점도, recirculation, 실제 정맥압 및 시간에 따른 혈역학 변화를 계산하지 않습니다. Afterload 감소로 ECMO flow가 증가해도 전신 관류가 좋아졌다는 뜻은 아닙니다.</p><p>생리 근거: <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7161276/" target="_blank" rel="noopener">Zakhary et al. How I manage drainage insufficiency on ECMO (2020)</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8857718/" target="_blank" rel="noopener">Rational approach to chatter (2022)</a>. 곡선의 수치 계수는 교육용으로 정했으며 위 논문에서 도출한 값이 아닙니다.</p><p id="math"></p></details></footer>
+</main>
+<script>
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id), inputs={drain:$('drain'),afterload:$('afterload'),rpm:$('rpm')};
+const canvas=$('circuit'), chart=$('curve'), c=canvas.getContext('2d'),g=chart.getContext('2d');
+const colors={bg:'#142d3e',text:'#f2f5f7',muted:'#b0c2ce',line:'#385566',blue:'#55bce8',red:'#f07e7e',green:'#74d7b0',amber:'#ffc66d'};
+let state={}, result={}, phase=0, angle=0,last=0,moving=!matchMedia('(prefers-reduced-motion: reduce)').matches;
+$('motion').checked=moving;
+function model(rpm,drain,afterload){
+ const d=drain/100, head=320*(rpm/3000)**2,R=22/(.3+.7*d),K=7;
+ const free=head>afterload ? (-R+Math.sqrt(R*R+4*K*(head-afterload)))/(2*K):0;
+ const capacity=6*d, critical=3000*Math.sqrt((K*capacity*capacity+R*capacity+80)/320);
+ const excess=Math.max(0,rpm/critical-1);
+ const collapse=capacity>0 ? .55*(1-Math.exp(-2.2*excess)):0;
+ const limit=capacity*(1-collapse),flow=Math.max(0,Math.min(free,limit));
+ return {flow,free,capacity,critical,collapse,limited:free>limit+.015,head};
+}
+function update(){
+ state=Object.fromEntries(Object.entries(inputs).map(([k,el])=>[k,+el.value]));result=model(state.rpm,state.drain,state.afterload);
+ $('rpm-display').textContent=state.rpm.toLocaleString('en-US');$('flow-display').textContent=result.flow.toFixed(2);
+ $('drain-out').textContent=state.drain+'%';$('afterload-out').textContent=state.afterload+' mmHg';$('rpm-out').textContent=state.rpm.toLocaleString('en-US')+' RPM';
+ const low=result.limited&&result.collapse>.025;
+ let title,detail,pearl;
+ if(state.rpm===0){title='Pump 정지';detail='RPM 0에서 회로 유량을 0으로 가정합니다.';pearl='실제 원심펌프 정지 시에는 압력차에 따른 역류 가능성을 고려해야 합니다.';}
+ else if(!state.drain){title='배액 불가';detail='펌프가 돌아가도 보낼 혈액이 없습니다.';pearl='RPM 증가보다 drainage가 막힌 원인을 먼저 확인합니다.';}
+ else if(result.free===0){title='유량이 형성되지 않습니다';detail='이 모형에서는 펌프 압력이 환류측 압력보다 낮습니다.';pearl='Pump 속도와 출구 측 압력의 균형도 flow를 결정합니다.';}
+ else if(low){title='Drainage 제한 · 정맥 허탈';detail='흡인이 배액 여유를 초과했습니다. RPM을 낮췄을 때 flow가 회복되는지 보세요.';pearl='부족한 drainage에서 RPM만 높이면 정맥 허탈이 심해져 flow가 더 줄 수 있습니다.';}
+ else if(result.limited){title='배액 가능한 유량에 도달';detail='RPM을 높여도 충분한 유량 증가를 얻기 어렵습니다.';pearl='RPM 증가에 flow가 따라오는지 함께 확인해야 합니다.';}
+ else{title='배액이 유지됩니다';detail='현재 조건에서는 RPM 증가에 따라 flow가 증가합니다.';pearl='같은 RPM이라도 drainage가 줄거나 afterload가 높아지면 flow가 감소할 수 있습니다.';}
+ $('state-title').textContent=title;$('state-title').style.color=low||!result.flow?colors.amber:colors.green;$('state-detail').textContent=detail;$('pearl').textContent=pearl;
+ $('math').textContent='수치 모형: ΔPpump = 320 × (RPM/3000)² − 7Q², ΔPload = afterload + R × Q, R = 22/(0.3 + 0.7d), 배액 여유 = 6d L/min (d = drainage/100). 정맥 허탈 항은 별도 적용합니다. 모든 계수와 압력 기준은 교육용 가정입니다.';
+ drawChart();drawCircuit();
+}
+function setup(ctx,el){const rect=el.getBoundingClientRect(),dpr=window.devicePixelRatio||1;const w=rect.width,h=rect.height;if(el.width!==Math.round(w*dpr)||el.height!==Math.round(h*dpr)){el.width=Math.round(w*dpr);el.height=Math.round(h*dpr);}ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);return {w,h};}
+function label(ctx,s,x,y,size=14,color=colors.muted,align='left'){ctx.fillStyle=color;ctx.font=`${size}px 'Malgun Gothic',sans-serif`;ctx.textAlign=align;ctx.fillText(s,x,y);}
+function path(ctx,points,color,width=10){ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineJoin='round';ctx.stroke();}
+function dots(ctx,points,color,offset){const lens=points.slice(1).map((p,i)=>Math.hypot(p[0]-points[i][0],p[1]-points[i][1])),L=lens.reduce((a,b)=>a+b,0),n=Math.max(3,Math.floor(L/36));for(let j=0;j<n;j++){let z=(offset+j*L/n)%L;for(let i=0;i<lens.length;i++){if(z<=lens[i]){const a=points[i],b=points[i+1],f=z/lens[i];ctx.beginPath();ctx.arc(a[0]+f*(b[0]-a[0]),a[1]+f*(b[1]-a[1]),3,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();break;}z-=lens[i];}}}
+function drawCircuit(){
+ const {w,h}=setup(c,canvas),small=w<600, y=small?96:106,veinEnd=w*.33,px=w*.50,ox=w*.77,rad=small?23:31,base=w*.06,right=w*.95, returnY=h-39;
+ const severe=result.limited&&result.collapse>.025;
+ const gap=state.drain===0?3:Math.max(5,30*(state.drain/100)*(1-(severe?result.collapse:0)));
+ let upper=[],lower=[];
+ for(let x=base;x<=veinEnd;x+=2){let z=(x-(base+veinEnd)/2)/((veinEnd-base)*.27),half=29-(29-gap)*Math.exp(-z*z);upper.push([x,y-half]);lower.push([x,y+half]);}
+ c.beginPath();upper.concat([...lower].reverse()).forEach(([x,v],i)=>i?c.lineTo(x,v):c.moveTo(x,v));c.closePath();c.fillStyle='#203f58';c.fill();path(c,upper,colors.blue,2);path(c,lower,colors.blue,2);
+ label(c,'환자 정맥',base,y-46,small?12:15);
+ const wobble=severe&&moving?Math.sin(phase*.09)*3:0;
+ const drain=[[veinEnd-12,y],[px-rad,y+wobble]],pre=[[px+rad,y],[ox-40,y]],ret=[[ox+40,y],[right,y],[right,returnY],[base,returnY]];
+ path(c,drain,'#46687a',13);path(c,pre,'#46687a',13);path(c,ret,'#765565',13);
+ if(result.flow>.005){dots(c,drain,colors.blue,phase);dots(c,pre,colors.blue,phase);dots(c,ret,colors.red,phase);}
+ c.fillStyle=colors.bg;c.beginPath();c.arc(px,y,rad,0,Math.PI*2);c.fill();c.strokeStyle=colors.blue;c.lineWidth=2;c.stroke();
+ for(let j=0;j<3;j++){let a=angle+j*Math.PI*2/3;c.beginPath();c.moveTo(px+Math.cos(a)*5,y+Math.sin(a)*5);c.lineTo(px+Math.cos(a+.3)*rad*.78,y+Math.sin(a+.3)*rad*.78);c.lineTo(px+Math.cos(a+.85)*rad*.55,y+Math.sin(a+.85)*rad*.55);c.closePath();c.fillStyle=colors.blue;c.fill();}
+ c.fillStyle=colors.bg;c.fillRect(ox-40,y-30,80,60);c.strokeStyle=colors.muted;c.lineWidth=2;c.strokeRect(ox-40,y-30,80,60);for(let j=-28;j<34;j+=12)path(c,[[ox+j,y-22],[ox+j,y+22]],'#678390',1);
+ const size=small?11:15;
+ label(c,small?'Drain':'Drainage cannula',w*.35,y+51,size,colors.muted,'center');label(c,'Pump',px,y-46,size,colors.text,'center');label(c,'Oxygenator',ox,y-46,size,colors.text,'center');label(c,'환자에게 반환',base,returnY+24,size);
+ label(c,state.drain===0?'배액 불가':severe?'정맥 허탈 / chatter':state.drain<65?'배액 여유 감소':'충분한 배액',base,y+72,small?11:14,severe?colors.amber:colors.muted);
+ label(c,'Afterload',right,small?y+62:y-17,small?11:14,colors.muted,'right');label(c,state.afterload+' mmHg',right,small?y+79:y+46,small?11:14,colors.text,'right');
+}
+function drawChart(){
+ const {w,h}=setup(g,chart),left=40,top=24,right=w-17,bottom=h-34,x=r=>left+(right-left)*r/5000,y=q=>bottom-(bottom-top)*q/12;
+ for(let q=0;q<=12;q+=3){path(g,[[left,y(q)],[right,y(q)]],colors.line,1);label(g,String(q),left-9,y(q)+4,11,colors.muted,'right');}
+ for(let r=0;r<=5000;r+=1000)label(g,String(r),x(r),bottom+19,11,colors.muted,r===5000?'right':r===0?'left':'center');
+ label(g,'L/min',left,14,11);label(g,'RPM',right,h-1,11,colors.muted,'right');
+ for(const kind of ['free','flow']){g.beginPath();for(let r=0;r<=5000;r+=20){let v=model(r,state.drain,state.afterload)[kind];r?g.lineTo(x(r),y(v)):g.moveTo(x(r),y(v));}g.strokeStyle=kind==='flow'?colors.green:'#9ab0bd';g.lineWidth=kind==='flow'?2.5:1.5;g.setLineDash(kind==='free'?[5,4]:[]);g.stroke();}g.setLineDash([]);
+ const xx=x(state.rpm),yy=y(result.flow);path(g,[[xx,bottom],[xx,yy]],colors.muted,1);g.beginPath();g.arc(xx,yy,5,0,Math.PI*2);g.fillStyle=colors.text;g.fill();label(g,result.flow.toFixed(2)+' L/min',Math.min(right-4,Math.max(left+40,xx)),Math.max(top+12,yy-12),12,colors.text,xx>right-70?'right':'center');
+}
+Object.values(inputs).forEach(el=>el.addEventListener('input',update));
+document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{const vals={normal:[100,80,3000],drain:[35,80,3000],rpm:[35,80,4500],afterload:[100,160,3000]}[b.dataset.preset];['drain','afterload','rpm'].forEach((k,i)=>inputs[k].value=vals[i]);update();}));
+$('motion').addEventListener('change',e=>{moving=e.target.checked;drawCircuit();});
+window.addEventListener('resize',()=>{drawChart();drawCircuit();});
+function animate(now){const dt=last?Math.min(.06,(now-last)/1000):0;last=now;if(moving){phase+=dt*result.flow*24;angle+=dt*state.rpm/3000*6;drawCircuit();}requestAnimationFrame(animate);}
+update();requestAnimationFrame(animate);
+})();
+</script></body></html>
